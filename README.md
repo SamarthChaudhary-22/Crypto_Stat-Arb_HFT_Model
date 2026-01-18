@@ -13,6 +13,14 @@ A high-frequency trading (HFT) execution engine written in C++20, designed for s
 - **Libraries:** CPR (Network), nlohmann/json (Parsing), OpenSSL (HMAC SHA256)
 - **Deployment:** AWS EC2 (ap-northeast-1)
 
+## 🧬 Architecture
+This project follows a professional "Research-to-Production" workflow:
+1.  **Research Layer (Python):** -   `data_loader.py`: Fetches OHLCV market data.
+    -   `analyzer.py`: Vectorized backtesting of mean-reversion signals using Pandas.
+    -   `optimizer.py`: Parameter tuning for Z-Score thresholds.
+2.  **Execution Layer (C++20):** -   Low-latency execution engine deployed on AWS EC2.
+    -   Handles real-time WebSocket streams and order management.
+
 ## How to Run
 1. Clone the repo.
 2. `mkdir build && cd build`
