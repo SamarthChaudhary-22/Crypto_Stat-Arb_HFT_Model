@@ -1,0 +1,218 @@
+[
+    {
+        "leg1": "ENAUSDT",
+        "leg2": "LINKUSDT",
+        "hedge_ratio": 0.0415904871372968,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ASTERUSDT",
+        "leg2": "BERAUSDT",
+        "hedge_ratio": 0.4531790557789246,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "1000PEPEUSDT",
+        "leg2": "FARTCOINUSDT",
+        "hedge_ratio": 0.006599331056691,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ASTERUSDT",
+        "leg2": "AXSUSDT",
+        "hedge_ratio": 0.7386120358881384,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ASTERUSDT",
+        "leg2": "DOTUSDT",
+        "hedge_ratio": 0.4399546272103983,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "FILUSDT",
+        "leg2": "UXLINKUSDT",
+        "hedge_ratio": 3.2915575100169336,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "AXSUSDT",
+        "leg2": "FILUSDT",
+        "hedge_ratio": 1.366036330472017,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ASTERUSDT",
+        "leg2": "AVAXUSDT",
+        "hedge_ratio": 0.0523738745224334,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ALPHAUSDT",
+        "leg2": "ARCUSDT",
+        "hedge_ratio": 0.1254695591998192,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ASTERUSDT",
+        "leg2": "DOGEUSDT",
+        "hedge_ratio": 8.056239702309254,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ENAUSDT",
+        "leg2": "XRPUSDT",
+        "hedge_ratio": 0.3775044245735991,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "NEARUSDT",
+        "leg2": "POLUSDT",
+        "hedge_ratio": 9.575406220220446,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "1000PEPEUSDT",
+        "leg2": "SUIUSDT",
+        "hedge_ratio": 0.0034393573767758,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "PENGUUSDT",
+        "leg2": "XRPUSDT",
+        "hedge_ratio": 0.0220073392660332,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "DOLOUSDT",
+        "leg2": "ENAUSDT",
+        "hedge_ratio": 0.3357177128390212,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "DOLOUSDT",
+        "leg2": "LINKUSDT",
+        "hedge_ratio": 0.0142287679990014,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "1000PEPEUSDT",
+        "leg2": "WIFUSDT",
+        "hedge_ratio": 0.0102085756966908,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "1000BONKUSDT",
+        "leg2": "XRPUSDT",
+        "hedge_ratio": 0.0143768475350493,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "DOGEUSDT",
+        "leg2": "HYPEUSDT",
+        "hedge_ratio": 0.0045943168868483,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "AVAXUSDT",
+        "leg2": "DOGEUSDT",
+        "hedge_ratio": 104.9664457072076,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "HYPEUSDT",
+        "leg2": "NEARUSDT",
+        "hedge_ratio": 15.62515310577684,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "LINKUSDT",
+        "leg2": "SOLUSDT",
+        "hedge_ratio": 0.1054439484277875,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "HYPEUSDT",
+        "leg2": "POLUSDT",
+        "hedge_ratio": 139.25791196067254,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    },
+    {
+        "leg1": "ADAUSDT",
+        "leg2": "HYPEUSDT",
+        "hedge_ratio": 0.0196784814389037,
+        "window_minutes": 60,
+        "entry_z": 2.0,
+        "exit_z": 0.0,
+        "stop_z": 4.0
+    }
+]
