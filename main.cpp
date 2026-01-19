@@ -1,223 +1,272 @@
 #include <iostream>
+#include <vector>
 #include <string>
 #include <thread>
 #include <chrono>
-#include <vector>
-#include <numeric>
 #include <cmath>
 #include <fstream>
 #include <map>
-#include <cstdint>
+#include <queue>
+#include <condition_variable>
+#include <atomic>
+#include <mutex>
+#include <set>
+#include <ixwebsocket/IXNetSystem.h>
+#include <ixwebsocket/IXWebSocket.h>
+#include <ixwebsocket/IXUserAgent.h>
+#include "binance_signer.h"
 #include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
-#include "binance_signer.h"
 
 using json = nlohmann::json;
 using namespace std;
 
 // --- CONFIGURATION ---
-const string API_KEY = "vF5L3975DpzUexkqHdhMJY4JjNV8VUSljqcWtGjRRlpQJL3G8mYMxnJm3I0ZYKUA";       // <-- PASTE KEYS HERE
-const string SECRET_KEY = "fbBCeBmMRoS8Lc1xken4qDqga6lhgTsEzSRV3RshUyj92fhUMrvKhvhMat7GUp9J"; // <-- PASTE KEYS HERE
-const string BASE_URL = "https://testnet.binancefuture.com";
-const string STRATEGY_FILE = "strategies.json";
-const double TRADE_SIZE_USDT = 20.0;
+const string API_KEY = std::getenv("BINANCE_API_KEY") ? std::getenv("BINANCE_API_KEY") : "YOUR_KEY_HERE";
+const string API_SECRET = std::getenv("BINANCE_API_SECRET") ? std::getenv("BINANCE_API_SECRET") : "YOUR_SECRET_HERE";
+const bool IS_TESTNET = true;
+const string BASE_URL = IS_TESTNET ? "https://testnet.binancefuture.com" : "https://fapi.binance.com";
+const string WS_URL = IS_TESTNET ? "wss://stream.binancefuture.com/ws" : "wss://fstream.binance.com/ws";
 
-// --- GLOBAL STATE ---
-int64_t TIME_OFFSET = 0; // 64-bit Integer to prevent overflow
+// --- STRATEGY PARAMETERS ---
+const double Z_ENTRY = 2.0;
+const double Z_EXIT = 0.5;
+const double OBI_LONG_THRESHOLD = -0.2;
+const double OBI_SHORT_THRESHOLD = 0.2;
+const double BET_SIZE = 1000.0; // Global Bet Size ($1000)
 
-struct TradingPair {
-    string leg1; string leg2; double hedge_ratio;
-    int window_size; double entry_z; double exit_z; double stop_z;
-    vector<double> spread_history;
-    bool in_position = false;
+// --- SHARED MARKET DATA ---
+struct MarketData {
+    map<string, double> prices;
+    map<string, double> bid_volume;
+    map<string, double> ask_volume;
+    long long timestamp;
+};
+MarketData shared_market;
+mutex market_mutex;
+
+struct PairConfig {
+    string asset1; string asset2;
+    double hedge_ratio; double mean; double std_dev;
 };
 
-// --- PRECISION TIME SYNC ---
-void sync_time() {
-    cout << "Syncing time with Binance Server..." << endl;
-    try {
-        // Measure the round-trip
-        int64_t t0 = chrono::duration_cast<chrono::milliseconds>(
-            chrono::system_clock::now().time_since_epoch()).count();
+// --- EXECUTION QUEUE (Producer-Consumer) ---
+struct OrderRequest {
+    string symbol;
+    string side;
+    double quantity;
+};
 
-        cpr::Response r = cpr::Get(cpr::Url{BASE_URL + "/fapi/v1/time"});
+queue<OrderRequest> order_queue;
+mutex queue_mutex;
+condition_variable queue_cv;
 
-        int64_t t1 = chrono::duration_cast<chrono::milliseconds>(
-            chrono::system_clock::now().time_since_epoch()).count();
+// --- WORKER 1: EXECUTION THREAD (The Gatling Gun) ---
+void ExecutionEngine() {
+    cpr::Session session;
+    session.SetHeader(cpr::Header{{"X-MBX-APIKEY", API_KEY}});
 
-        if (r.status_code == 200) {
-            auto j = json::parse(r.text);
-            int64_t server_time = j["serverTime"].get<int64_t>(); // <--- 64-BIT FIX
+    // Warmup DNS & SSL
+    session.SetUrl(cpr::Url{BASE_URL + "/fapi/v1/time"});
+    session.Get();
+    cout << "🔫 Execution Engine Ready & Connected." << endl;
 
-            // Latency is (t1 - t0) / 2
-            int64_t latency = (t1 - t0) / 2;
+    while (true) {
+        unique_lock<mutex> lock(queue_mutex);
+        queue_cv.wait(lock, []{ return !order_queue.empty(); });
 
-            // Expected Server Time NOW = ServerTime + Latency
-            int64_t expected_server_now = server_time + latency;
+        OrderRequest order = order_queue.front();
+        order_queue.pop();
+        lock.unlock();
 
-            // Offset = Expected - Local
-            TIME_OFFSET = expected_server_now - t1;
+        try {
+            // Logic is handled in PlaceOrder, but we cast safely here too
+            int qty_int = (int)order.quantity;
+            long long timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+            string query = "symbol=" + order.symbol + "&side=" + order.side + "&type=MARKET&quantity=" + to_string(qty_int) + "&timestamp=" + to_string(timestamp);
+            string signature = HMAC_SHA256(query, API_SECRET);
+            string url = BASE_URL + "/fapi/v1/order?" + query + "&signature=" + signature;
 
-            cout << "   Server Time: " << server_time << endl;
-            cout << "   Local Time:  " << t1 << endl;
-            cout << "   Latency:     " << latency << "ms" << endl;
-            cout << "   Time Offset: " << TIME_OFFSET << "ms" << endl;
-        } else {
-            cout << "   [FAILED] Could not sync time." << endl;
-        }
-    } catch (...) {
-        cout << "   [ERROR] Connection failed during sync." << endl;
+            session.SetUrl(cpr::Url{url});
+
+            // --- START NETWORK STOPWATCH ---
+            auto net_start = chrono::high_resolution_clock::now();
+
+            // FIRE!
+            session.Post();
+
+            // --- STOP NETWORK STOPWATCH ---
+            auto net_end = chrono::high_resolution_clock::now();
+            auto net_duration = chrono::duration_cast<chrono::milliseconds>(net_end - net_start).count();
+            long long one_way = net_duration / 2;
+
+            cout << "   🚀 ORDER FIRED: " << order.side << " " << order.symbol
+                 << " | RTT: " << net_duration << "ms"
+                 << " | Est. Reach: " << one_way << "ms" << endl;
+
+        } catch (...) {}
     }
 }
 
-int64_t get_current_timestamp() {
-    int64_t local_now = chrono::duration_cast<chrono::milliseconds>(
-        chrono::system_clock::now().time_since_epoch()).count();
-    return local_now + TIME_OFFSET;
-}
+// Helper to push to queue (Safe Rounding Version)
+void PlaceOrder(string symbol, string side, double quantity) {
+    // 1. Force round UP to the nearest whole number.
+    //    Example: 0.57 -> 1.0.  5.2 -> 6.0.
+    int qty_int = (int)ceil(quantity);
 
-void place_order(string symbol, string side, double amount_usdt, double price) {
-    if (price <= 0) return;
-    int qty = (int)(amount_usdt / price);
-    if (qty < 1) qty = 1;
+    // 2. Extra Safety: Even if ceil returns 0 (e.g. qty was 0.0), return.
+    if (qty_int <= 0) return;
 
-    // 1. Get Timestamp (Corrected)
-    // We add +1000ms "Future Padding" to account for internal C++ processing time & upload speed
-    int64_t timestamp = get_current_timestamp() - 1000;
-
-    // Note: It sounds counter-intuitive, but setting timestamp slightly in the PAST (relative to server)
-    // + a large recvWindow is safer than setting it in the future.
-    // If you send a "Future" timestamp, Binance rejects it immediately ("Timestamp > Server Time").
-    // We rely on recvWindow to handle the delay.
-
-    string query = "symbol=" + symbol +
-                   "&side=" + side +
-                   "&type=MARKET" +
-                   "&quantity=" + to_string(qty) +
-                   "&timestamp=" + to_string(timestamp) +
-                   "&recvWindow=60000"; // 60s tolerance
-
-    string signature = BinanceSigner::hmac_sha256(SECRET_KEY, query);
-    string payload = query + "&signature=" + signature;
-
-    cout << "   >>> SENDING " << symbol << " " << side << " " << qty << "..." << flush;
-    cpr::Response r = cpr::Post(
-        cpr::Url{BASE_URL + "/fapi/v1/order"},
-        cpr::Body{payload},
-        cpr::Header{{"X-MBX-APIKEY", API_KEY}, {"Content-Type", "application/x-www-form-urlencoded"}}
-    );
-
-    if (r.status_code == 200) cout << " [SUCCESS]" << endl;
-    else cout << " [FAILED] " << r.text << endl;
-}
-
-// ... (Rest of load_strategies / get_all_prices / get_z_score / main is identical)
-// Just ensure main() calls sync_time() first!
-
-// --- COPY-PASTE UTILS BELOW TO COMPLETE THE FILE ---
-
-map<string, double> get_all_prices() {
-    map<string, double> price_map;
-    try {
-        cpr::Response r = cpr::Get(cpr::Url{BASE_URL + "/fapi/v1/ticker/price"});
-        if (r.status_code == 200) {
-            auto j = json::parse(r.text);
-            for (auto& item : j) {
-                price_map[item["symbol"]] = stod(item["price"].get<string>());
-            }
-        }
-    } catch (...) {}
-    return price_map;
-}
-
-vector<TradingPair> load_strategies() {
-    vector<TradingPair> pairs;
-    ifstream file(STRATEGY_FILE);
-    if (!file.is_open()) return pairs;
-    json j; file >> j;
-    for (auto& item : j) {
-        string s1 = item["leg1"];
-        string s2 = item["leg2"];
-        if (s1.find("?") != string::npos || s2.find("?") != string::npos) continue;
-
-        TradingPair p;
-        p.leg1 = s1; p.leg2 = s2;
-        p.hedge_ratio = item["hedge_ratio"];
-        p.window_size = (int)item["window_minutes"] * 30;
-        p.entry_z = item["entry_z"];
-        p.exit_z = item["exit_z"];
-        p.stop_z = item.contains("stop_z") ? (double)item["stop_z"] : 6.0;
-        pairs.push_back(p);
+    {
+        lock_guard<mutex> lock(queue_mutex);
+        order_queue.push({symbol, side, (double)qty_int});
     }
-    return pairs;
+    queue_cv.notify_one();
 }
 
-double get_z_score(const vector<double>& history, double current_val) {
-    if (history.empty()) return 0.0;
-    double sum = accumulate(history.begin(), history.end(), 0.0);
-    double mean = sum / history.size();
-    double sq_sum = 0.0;
-    for (double v : history) sq_sum += (v - mean) * (v - mean);
-    double std_dev = sqrt(sq_sum / history.size());
-    return (std_dev == 0) ? 0.0 : (current_val - mean) / std_dev;
+// --- WORKER 2: WEBSOCKET FEED ---
+void WebSocketFeed() {
+    ix::WebSocket webSocket;
+    webSocket.setUrl(WS_URL);
+    webSocket.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg) {
+        if (msg->type == ix::WebSocketMessageType::Message) {
+            try {
+                json j = json::parse(msg->str);
+                lock_guard<mutex> lock(market_mutex);
+
+                if (j.contains("e") && j["e"] == "bookTicker") {
+                    string sym = j["s"];
+                    shared_market.bid_volume[sym] = stod(string(j["B"]));
+                    shared_market.ask_volume[sym] = stod(string(j["A"]));
+                }
+                if (j.contains("b") && j.contains("a")) {
+                    string sym = j["s"];
+                    double best_bid = stod(string(j["b"]));
+                    double best_ask = stod(string(j["a"]));
+                    shared_market.prices[sym] = (best_bid + best_ask) / 2.0;
+                }
+                shared_market.timestamp = chrono::system_clock::now().time_since_epoch().count();
+            } catch (...) {}
+        }
+    });
+    webSocket.start();
+
+    json subscribe_msg;
+    subscribe_msg["method"] = "SUBSCRIBE";
+    subscribe_msg["params"] = {"!bookTicker"};
+    subscribe_msg["id"] = 1;
+    this_thread::sleep_for(chrono::seconds(2));
+    webSocket.send(subscribe_msg.dump());
+    while (true) { this_thread::sleep_for(chrono::seconds(10)); }
 }
 
+// --- MAIN LOGIC ---
 int main() {
-    cout << "--- HFT LIVE ENGINE (64-BIT TIME FIX) ---" << endl;
+    ix::initNetSystem();
+    map<string, int> active_positions;
 
-    sync_time(); // <--- CRITICAL STEP
+    cout << "--- HFT ENGINE v6.3 (Safe & Corrected) ---" << endl;
 
-    vector<TradingPair> portfolio = load_strategies();
-    cout << "Loaded " << portfolio.size() << " pairs." << endl;
+    ifstream f("strategies.json");
+    if (!f.good()) { cout << "Error: strategies.json not found!" << endl; return 1; }
+    json strat_json = json::parse(f);
+    vector<PairConfig> pairs;
+    for (auto& item : strat_json) {
+        if (!item.contains("leg1")) continue;
+        pairs.push_back({item["leg1"], item["leg2"], item["hedge_ratio"], item["mean"], item["std_dev"]});
+    }
+    cout << "Loaded " << pairs.size() << " pairs." << endl;
+
+    thread ws_thread(WebSocketFeed);
+    ws_thread.detach();
+    thread exec_thread(ExecutionEngine);
+    exec_thread.detach();
+
+    cout << "Waiting for Data..." << endl;
+    this_thread::sleep_for(chrono::seconds(3));
 
     int tick = 0;
     while (true) {
-        map<string, double> market = get_all_prices();
-        if (market.empty()) { this_thread::sleep_for(chrono::seconds(1)); continue; }
+        auto start = chrono::high_resolution_clock::now();
 
-        for (auto& pair : portfolio) {
-            if (market.find(pair.leg1) == market.end() || market.find(pair.leg2) == market.end()) continue;
+        for (const auto& p : pairs) {
 
-            double p1 = market[pair.leg1];
-            double p2 = market[pair.leg2];
-            double spread = p1 - (pair.hedge_ratio * p2);
+            double p1 = 0, p2 = 0, bid1 = 0, ask1 = 0, bid2 = 0, ask2 = 0;
+            bool data_ready = false;
 
-            pair.spread_history.push_back(spread);
-            if (pair.spread_history.size() > pair.window_size)
-                pair.spread_history.erase(pair.spread_history.begin());
+            // --- CRITICAL SECTION: PEEK ONLY (No Copying) ---
+            {
+                lock_guard<mutex> lock(market_mutex);
+                if (shared_market.prices.count(p.asset1) && shared_market.prices.count(p.asset2)) {
+                    p1 = shared_market.prices[p.asset1];
+                    p2 = shared_market.prices[p.asset2];
 
-            if (pair.spread_history.size() < 20) continue;
+                    bid1 = shared_market.bid_volume[p.asset1];
+                    ask1 = shared_market.ask_volume[p.asset1];
+                    bid2 = shared_market.bid_volume[p.asset2];
+                    ask2 = shared_market.ask_volume[p.asset2];
 
-            double z = get_z_score(pair.spread_history, spread);
-
-            if (!pair.in_position) {
-                if (abs(z) > pair.entry_z) {
-                    cout << "\n[ENTRY] " << pair.leg1 << "/" << pair.leg2 << " Z=" << z << endl;
-                    if (z > 0) {
-                        place_order(pair.leg1, "SELL", TRADE_SIZE_USDT, p1);
-                        place_order(pair.leg2, "BUY", TRADE_SIZE_USDT, p2);
-                    } else {
-                        place_order(pair.leg1, "BUY", TRADE_SIZE_USDT, p1);
-                        place_order(pair.leg2, "SELL", TRADE_SIZE_USDT, p2);
-                    }
-                    pair.in_position = true;
+                    data_ready = true;
                 }
-            } else {
-                bool take_profit = abs(z) < pair.exit_z;
-                bool stop_loss   = abs(z) > pair.stop_z;
+            }
 
-                if (take_profit || stop_loss) {
-                    cout << "\n[EXIT] " << pair.leg1 << "/" << pair.leg2 << " Z=" << z << endl;
-                    place_order(pair.leg1, "BUY", TRADE_SIZE_USDT, p1);
-                    place_order(pair.leg2, "SELL", TRADE_SIZE_USDT, p2);
-                    pair.in_position = false;
+            if (!data_ready) continue;
+
+            // --- MATH SECTION (Lock-Free) ---
+            double spread = log(p1) - (p.hedge_ratio * log(p2));
+            double z_score = (spread - p.mean) / p.std_dev;
+            string pair_id = p.asset1 + p.asset2;
+
+            double obi1 = 0.0, obi2 = 0.0;
+            if (bid1 + ask1 > 0) obi1 = (bid1 - ask1) / (bid1 + ask1);
+            if (bid2 + ask2 > 0) obi2 = (bid2 - ask2) / (bid2 + ask2);
+
+            // --- DECISION SECTION ---
+            if (active_positions.count(pair_id)) {
+                int direction = active_positions[pair_id];
+
+                // --- TAKE PROFIT (Direction -1) ---
+                // We entered: SELL P1, BUY P2.
+                // We must:    BUY P1, SELL P2.
+                if (direction == -1 && z_score < Z_EXIT) {
+                    cout << "💰 TAKE PROFIT: " << p.asset1 << "/" << p.asset2 << endl;
+                    PlaceOrder(p.asset1, "BUY", BET_SIZE / p1);          // <--- FIXED
+                    PlaceOrder(p.asset2, "SELL", (BET_SIZE * p.hedge_ratio) / p2); // <--- FIXED
+                    active_positions.erase(pair_id);
+                }
+
+                // --- TAKE PROFIT (Direction 1) ---
+                // We entered: BUY P1, SELL P2.
+                // We must:    SELL P1, BUY P2.
+                else if (direction == 1 && z_score > -Z_EXIT) {
+                    cout << "💰 TAKE PROFIT: " << p.asset1 << "/" << p.asset2 << endl;
+                    PlaceOrder(p.asset1, "SELL", BET_SIZE / p1);         // <--- FIXED
+                    PlaceOrder(p.asset2, "BUY", (BET_SIZE * p.hedge_ratio) / p2);  // <--- FIXED
+                    active_positions.erase(pair_id);
+                }
+            }
+            else {
+                // --- ENTRY (Short Spread) ---
+                if (z_score > Z_ENTRY && obi1 < OBI_SHORT_THRESHOLD && obi2 > OBI_LONG_THRESHOLD) {
+                    cout << "⚡ SNIPER ENTRY: " << p.asset1 << "/" << p.asset2 << " Z:" << z_score << endl;
+                    active_positions[pair_id] = -1;
+                    PlaceOrder(p.asset1, "SELL", BET_SIZE / p1);
+                    PlaceOrder(p.asset2, "BUY", (BET_SIZE * p.hedge_ratio) / p2);
+                }
+                // --- ENTRY (Long Spread) ---
+                else if (z_score < -Z_ENTRY && obi1 > OBI_LONG_THRESHOLD && obi2 < OBI_SHORT_THRESHOLD) {
+                    cout << "⚡ SNIPER ENTRY: " << p.asset1 << "/" << p.asset2 << " Z:" << z_score << endl;
+                    active_positions[pair_id] = 1;
+                    PlaceOrder(p.asset1, "BUY", BET_SIZE / p1);          // <--- FIXED (Was 100)
+                    PlaceOrder(p.asset2, "SELL", (BET_SIZE * p.hedge_ratio) / p2); // <--- FIXED
                 }
             }
         }
 
-        if (tick % 5 == 0) cout << "\r[Tick " << tick << "] Monitoring..." << flush;
-        tick++;
-        this_thread::sleep_for(chrono::seconds(2));
+        auto end = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+        if (tick++ % 50000 == 0) cout << "[Tick " << tick << "] HFT Latency: " << duration.count() << " us      " << "\r" << flush;
+        this_thread::sleep_for(chrono::microseconds(10));
     }
     return 0;
 }
