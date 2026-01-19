@@ -112,4 +112,11 @@ public:
     }
 };
 
+// --- THE BRIDGE ---
+// This function allows main.cpp to call HMAC_SHA256 directly.
+// Note: It swaps the arguments to match the class method: (data, key) -> (key, data)
+inline std::string HMAC_SHA256(std::string data, std::string key) {
+    return BinanceSigner::hmac_sha256(key, data);
+}
+
 #endif
