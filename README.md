@@ -1,16 +1,16 @@
-#Crypto Stat-Arb HFT Engine
+# Crypto Stat-Arb HFT Engine
 A professional-grade High-Frequency Trading (HFT) execution engine written in C++20, designed for statistical arbitrage (pairs trading) on Binance Futures.
 
 This engine is optimized for latency-critical execution, utilizing a multi-threaded producer-consumer architecture and persistent network sessions to achieve single-digit millisecond round-trip times.
 
-#⚡ Performance Metrics
+# ⚡ Performance Metrics
 Logic Latency: ~42 microseconds (Internal tick-to-decision time).
 
 Network Latency (RTT): ~4-7ms (Colocated in AWS Tokyo ap-northeast-1).
 
 Throughput: Capable of processing >10,000 market updates per second without drift.
 
-#🚀 Key Features
+# 🚀 Key Features
 Zero-Copy Market Data: Implemented "Peek-only" shared memory logic to process high-volume WebSocket streams (!bookTicker) without expensive map copying overhead.
 
 Persistent Execution Engine: Dedicated worker thread with cpr::Session keep-alive (TCP/SSL reuse) to eliminate handshake latency.
@@ -21,7 +21,7 @@ Atomic Position Management: Robust state tracking with "Ceiling Rounding" and mi
 
 Direct Exchange Signing: Custom header-only HMAC-SHA256 implementation (OpenSSL) for zero-dependency signing.
 
-#🛠 Tech Stack
+# 🛠 Tech Stack
 Core Language: C++20 (Multi-threading, Atomic types, Mutexes).
 
 #Networking:
@@ -36,28 +36,28 @@ Data: nlohmann/json (High-performance parsing).
 
 Infrastructure: AWS EC2 (Amazon Linux 2023) in Tokyo (ap-northeast-1).
 
-#🧬 Architecture
+# 🧬 Architecture
 This project follows a rigorous "Research-to-Production" workflow:
 
-##1. Research Layer (Python)
+## 1. Research Layer (Python)
 data_loader.py: Fetches historical tick/OHLCV data for correlation analysis.
 
 cointegration.py: Identifies mean-reverting pairs using Engle-Granger two-step method.
 
 strategy_optimizer.py: Vectorized backtesting to calibrate Hedge Ratios, Z-Score thresholds, and Halflife.
 
-##2. Execution Layer (C++)
+## 2. Execution Layer (C++)
 Main Loop: Zero-copy access to shared market memory; evaluates Z-Scores and OBI (Order Book Imbalance) in <50µs.
 
 Execution Thread: A persistent "hot" thread that waits on a condition variable and fires orders instantly upon signal, skipping DNS/SSL overhead.
 
-#📥 How to Build & Run
-##Prerequisites
+# 📥 How to Build & Run
+## Prerequisites
 C++ Compiler (g++ 11+)
 
-##Libraries: ixwebsocket, openssl, cpr, libcurl, nlohmann_json
+## Libraries: ixwebsocket, openssl, cpr, libcurl, nlohmann_json
 
-##Build Instructions
+## Build Instructions
 ## 1. Clone the repository
 git clone https://github.com/yourusername/HFT-Engine.git
 cd HFT-Engine
