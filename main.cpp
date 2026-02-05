@@ -98,7 +98,7 @@ double SafeGetDouble(const json& j, const string& key) {
 
 // --- INITIALIZATION ---
 void LoadExchangeInfo() {
-    cout << "🌍 Fetching Exchange Precision Rules..." << endl;
+    cout << "Fetching Exchange Precision Rules..." << endl;
     cpr::Session session;
     session.SetUrl(cpr::Url{BASE_URL + "/fapi/v1/exchangeInfo"});
     auto response = session.Get();
@@ -137,6 +137,8 @@ void ExecutionEngine() {
 
         try {
             long long timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+
+            // USE PRECISE FORMATTER
             string qty_str = FormatQuantity(order.symbol, order.quantity);
 
             string query = "symbol=" + order.symbol + "&side=" + order.side + "&type=MARKET&quantity=" + qty_str + "&timestamp=" + to_string(timestamp);
@@ -146,29 +148,28 @@ void ExecutionEngine() {
             string url = BASE_URL + "/fapi/v1/order?" + query + "&signature=" + signature;
 
             session.SetUrl(cpr::Url{url});
+
+            // MEASURE NETWORK SPEED
+            auto net_start = chrono::high_resolution_clock::now();
             auto response = session.Post();
+            auto net_end = chrono::high_resolution_clock::now();
+
+            long long rtt_us = chrono::duration_cast<chrono::microseconds>(net_end - net_start).count();
+            double rtt_ms = rtt_us / 1000.0;
 
             if (response.status_code == 200) {
-                cout << (order.is_close ? "🛡️ CLOSE " : "🚀 ENTRY ") << order.symbol << " [FILLED] Qty:" << qty_str << endl;
+                json j = json::parse(response.text);
+                long long transact_time = j["transactTime"];
+                long long latency_to_server = transact_time - timestamp;
+
+                cout << (order.is_close ? "CLOSE " : " ENTRY ") << order.symbol << " [FILLED]" << endl;
+                cout << "      ├─  Network RTT:   " << rtt_ms << " ms" << endl;
+                cout << "      ├─  Binance Time:  " << transact_time << endl;
+                cout << "      └─ Diff (Local->Remote): " << latency_to_server << " ms" << endl;
             } else {
-                json j_err = json::parse(response.text);
-                int code = j_err.contains("code") ? j_err["code"].get<int>() : 0;
-                string msg = j_err.contains("msg") ? j_err["msg"].get<string>() : "Unknown";
-
-                cout << " FAILED (" << order.symbol << "): " << msg << " [Code: " << code << "]" << endl;
-
-                if (code == -4005 || code == -4131) {
-                     cout << "️ ORDER TOO LARGE! Slicing " << order.quantity << " -> " << (order.quantity/2) << endl;
-                     double half_qty = order.quantity / 2.0;
-                     if (half_qty > 0) {
-                        PlaceOrder(order.symbol, order.side, half_qty, order.is_close);
-                        PlaceOrder(order.symbol, order.side, half_qty, order.is_close);
-                     }
-                }
+                cout << "❌ FAILED (" << order.symbol << "): " << response.text << endl;
             }
-        } catch (const exception& e) {
-            cout << " EXECUTION EXCEPTION: " << e.what() << endl;
-        }
+        } catch (...) {}
     }
 }
 
@@ -195,7 +196,7 @@ void RiskEngine() {
     const double MAX_LOSS_PER_POS = -20.0;
     const double GLOBAL_PNL_KILL = -100.0;
 
-    cout << "🛡️ Risk Engine Active." << endl;
+    cout << "Risk Engine Active." << endl;
     int heartbeat = 0;
 
     while (true) {
@@ -312,10 +313,11 @@ int main() {
     this_thread::sleep_for(chrono::seconds(3));
 
     map<string, int> active_positions;
+	int tick = 0;
 
     while (true) {
         if (GLOBAL_HALT) { this_thread::sleep_for(chrono::seconds(1)); continue; }
-
+		auto start = chrono::high_resolution_clock::now();
         for (const auto& p : global_pairs) {
             double p1=0, p2=0, b1=0, a1=0, b2=0, a2=0;
             {
@@ -366,6 +368,9 @@ int main() {
                 }
             }
         }
+        auto end = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+        if (tick++ % 50000 == 0) cout << "[Tick " << tick << "] HFT Latency: " << duration.count() << " us      " << "\r" << flush;
         this_thread::sleep_for(chrono::microseconds(100));
     }
     return 0;
