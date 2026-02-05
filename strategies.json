@@ -99,15 +99,6 @@
         "stop_z": 4.0
     },
     {
-        "leg1": "NEARUSDT",
-        "leg2": "POLUSDT",
-        "hedge_ratio": 9.575406220220446,
-        "window_minutes": 60,
-        "entry_z": 2.0,
-        "exit_z": 0.0,
-        "stop_z": 4.0
-    },
-    {
         "leg1": "1000PEPEUSDT",
         "leg2": "SUIUSDT",
         "hedge_ratio": 0.0034393573767758,
@@ -192,15 +183,6 @@
         "leg1": "LINKUSDT",
         "leg2": "SOLUSDT",
         "hedge_ratio": 0.1054439484277875,
-        "window_minutes": 60,
-        "entry_z": 2.0,
-        "exit_z": 0.0,
-        "stop_z": 4.0
-    },
-    {
-        "leg1": "HYPEUSDT",
-        "leg2": "POLUSDT",
-        "hedge_ratio": 139.25791196067254,
         "window_minutes": 60,
         "entry_z": 2.0,
         "exit_z": 0.0,
